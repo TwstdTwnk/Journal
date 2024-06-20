@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const url = '/Users/alexbrown/Journal.pdf';
+    const url = 'Journal.pdf';
     const loadingTask = pdfjsLib.getDocument(url);
 
     loadingTask.promise.then(pdf => {
