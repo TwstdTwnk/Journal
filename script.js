@@ -1,45 +1,68 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const url = 'Journal.pdf';
-    const loadingTask = pdfjsLib.getDocument(url);
 
-    loadingTask.promise.then(pdf => {
-        const container = document.querySelector('.gallery');
-        const toc = document.querySelector('.toc');
-        const numPages = pdf.numPages;
-
-        for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-            pdf.getPage(pageNum).then(page => {
-                const scale = 0.5;
-                const viewport = page.getViewport({ scale });
-                const canvas = document.createElement('canvas');
-                const context = canvas.getContext('2d');
-                canvas.height = viewport.height;
-                canvas.width = viewport.width;
-
-                const renderContext = {
-                    canvasContext: context,
-                    viewport: viewport
+            document.addEventListener('DOMContentLoaded', function() {
+                const url = '/Users/alexbrown/Desktop/Journal/Journal.pdf';  // Replace with your PDF file path
+            
+                let pdfDoc = null;
+                const scale = 1.5,
+                      container = document.querySelector('.gallery'),
+                      textContainer = document.querySelector('.text-content');
+            
+                const renderPage = num => {
+                    return pdfDoc.getPage(num).then(page => {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+            
+                        // Set scale
+                        const viewport = page.getViewport({ scale });
+                        canvas.height = viewport.height;
+                        canvas.width = viewport.width;
+            
+                        const renderCtx = {
+                            canvasContext: ctx,
+                            viewport
+                        };
+            
+                        return page.render(renderCtx).promise.then(() => {
+                            const pageDiv = document.createElement('div');
+                            pageDiv.className = 'page';
+                            pageDiv.appendChild(canvas);
+                            container.appendChild(pageDiv);
+            
+                            // Apply transition
+                            setTimeout(() => {
+                                pageDiv.style.opacity = 1;
+                            }, num * 100);  // Stagger the appearance based on page number
+                        });
+                    });
                 };
-                page.render(renderContext).promise.then(() => {
-                    const div = document.createElement('div');
-                    div.className = 'page';
-                    div.appendChild(canvas);
-                    container.appendChild(div);
-
-                    const tocItem = document.createElement('div');
-                    tocItem.textContent = `Page ${pageNum}`;
-                    toc.appendChild(tocItem);
-
-                    // Adding fade-in effect
-                    div.style.opacity = 0;
-                    div.style.transition = `opacity 3s ease-in-out ${pageNum * 0.1}s`;
-                    setTimeout(() => {
-                        div.style.opacity = 1;
-                    }, 100);
+            
+                // Render the text
+                const renderText = () => {
+                    textData.forEach(page => {
+                        const textDiv = document.createElement('div');
+                        textDiv.className = 'text-page';
+                        textDiv.innerHTML = `<h2>Page ${page.page_num}</h2><p>${page.text}</p>`;
+                        textContainer.appendChild(textDiv);
+                    });
+                };
+            
+                // Get document
+                pdfjsLib.getDocument(url).promise.then(pdfDoc_ => {
+                    pdfDoc = pdfDoc_;
+            
+                    // Render all pages in order
+                    const renderPages = async () => {
+                        for (let i = 1; i <= pdfDoc.numPages; i++) {
+                            await renderPage(i);
+                        }
+                    };
+            
+                    renderPages();
+                    renderText();
+                }).then(() => {
+                    console.log('All pages and text rendered');
+                }).catch(err => {
+                    console.error('Error rendering PDF:', err);
                 });
             });
-        }
-    }, reason => {
-        console.error(reason);
-    });
-});
+            

@@ -3,19 +3,206 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF Gallery</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>PDF and Text Viewer</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            font-family: 'SF Pro', sans-serif;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .gallery {
+            width: 60%;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 5px;
+            justify-items: center;
+            align-items: flex-start;
+            overflow-y: auto;
+            position: relative;
+            background: #313131;
+            padding: 10px;
+        }
+
+        .gallery .page {
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            margin: 10px;
+            opacity: 0;
+            transition: opacity 1s ease-in-out, filter 1s ease-in-out;
+            cursor: pointer;
+        }
+
+        .gallery .page canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        .text-content {
+            width: 40%;
+            background: #0f0f0f;
+            padding: 20px;
+            color: rgb(255, 255, 255);
+            overflow-y: auto;
+            font-family: 'SF Pro', sans-serif;
+            position: relative;
+        }
+
+        .text-page {
+            margin-bottom: 20px;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out, filter 0.5s ease-in-out;
+        }
+
+        .text-page h2 {
+            margin: 0 0 10px;
+        }
+
+        .text-page p {
+            margin: 0;
+            white-space: pre-wrap; /* Preserve whitespace formatting */
+        }
+
+        .highlight {
+            background-color: rgb(0, 0, 0);
+            color: rgb(255, 221, 29);
+        }
+
+        .fade-out {
+            animation: fadeOut 0.5s forwards;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s forwards;
+        }
+
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+                filter: blur(5px);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                filter: blur(5px);
+            }
+            to {
+                opacity: 1;
+                filter: blur(0);
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="container">
-        <div class="toc">
-            <!-- Table of contents will be dynamically generated -->
-        </div>
-        <div class="gallery scrollbar">
+        <div class="gallery">
             <!-- PDF pages will be dynamically rendered here -->
+        </div>
+        <div class="text-content">
+            <!-- Text from the PDF will be dynamically rendered here -->
         </div>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
-    <script src="script.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const url = '/Users/alexbrown/Desktop/Journal/Journal.pdf';  // Your PDF file path
+
+            let pdfDoc = null;
+            const scale = 1.5,
+                  container = document.querySelector('.gallery'),
+                  textContainer = document.querySelector('.text-content'),
+                  textPageDiv = document.createElement('div');
+
+            textPageDiv.className = 'text-page';
+            textContainer.appendChild(textPageDiv);
+
+            let pageTexts = [];
+            let dates = [];
+            let combinedTexts = {};
+            let currentDate = '';
+
+            const renderPage = async (num) => {
+                const page = await pdfDoc.getPage(num);
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                const viewport = page.getViewport({ scale });
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                const renderCtx = {
+                    canvasContext: ctx,
+                    viewport
+                };
+
+                await page.render(renderCtx).promise;
+
+                const pageDiv = document.createElement('div');
+                pageDiv.className = 'page';
+                pageDiv.appendChild(canvas);
+                container.appendChild(pageDiv);
+
+                const textContent = await page.getTextContent();
+                const textItems = textContent.items.map(item => item.str).join(' ').replace(/A L E X A N D E R\s+G U T H R I E/g, ''); // Remove "A L E X A N D E R   G U T H R I E"
+                pageTexts[num - 1] = textItems;
+
+                const datePattern = /DAY \d+\s+\w+\s+\w+ \d{1,2}, \d{4} \./;
+                const dateMatch = textItems.match(datePattern);
+                if (dateMatch) {
+                    currentDate = dateMatch[0];
+                }
+                dates[num - 1] = currentDate;
+
+                if (!combinedTexts[currentDate]) {
+                    combinedTexts[currentDate] = '';
+                }
+                combinedTexts[currentDate] += textItems + '\n';
+
+                pageDiv.addEventListener('click', () => {
+                    if (textPageDiv.classList.contains('fade-in')) {
+                        textPageDiv.classList.remove('fade-in');
+                        textPageDiv.classList.add('fade-out');
+                    }
+
+                    setTimeout(() => {
+                        const highlightedText = combinedTexts[dates[num - 1]].replace(textItems, `<span class="highlight">${textItems}</span>`);
+                        textPageDiv.classList.remove('fade-out');
+                        textPageDiv.innerHTML = `<h2>${dates[num - 1]}</h2><p>${highlightedText}</p>`;
+                        textPageDiv.classList.add('fade-in');
+                        textPageDiv.style.opacity = 1;
+                    }, 500);  // Ensure this matches the fade out duration
+                });
+
+                setTimeout(() => {
+                    pageDiv.style.opacity = 1;
+                }, num * 100);  // Stagger the appearance based on page number
+            };
+
+            pdfjsLib.getDocument(url).promise.then(pdfDoc_ => {
+                pdfDoc = pdfDoc_;
+
+                const renderPages = async () => {
+                    for (let i = 1; i <= pdfDoc.numPages; i++) {
+                        await renderPage(i);
+                    }
+                };
+
+                renderPages();
+            }).then(() => {
+                console.log('All pages and text rendered');
+            }).catch(err => {
+                console.error('Error rendering PDF:', err);
+            });
+        });
+    </script>
 </body>
 </html>
